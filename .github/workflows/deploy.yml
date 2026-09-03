@@ -55,7 +55,7 @@ jobs:
     name: Deploy Container to VPS
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: inputs.deploy_to_vps == true
+    if: ${{ inputs.deploy_to_vps }}
     steps:
       - name: SSH into VPS and Run Container
         uses: appleboy/ssh-action@v1.0.3
@@ -70,39 +70,8 @@ jobs:
             mkdir -p "$DEPLOY_DIR"
             cd "$DEPLOY_DIR"
 
-            # Create or update production docker-compose file on VPS
-            cat << 'EOF' > docker-compose.prod.yml
-version: '3.8'
-
-services:
-  web:
-    image: ghcr.io/sainibhaowal/alcyoneus-web:latest
-    container_name: alcyoneus_web
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:3000:3000"
-    environment:
-      - NODE_ENV=production
-      - PORT=3000
-      - HOSTNAME=0.0.0.0
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-        reservations:
-          memory: 128M
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
-EOF
+            # Download official production compose file directly from repository
+            curl -sSL https://raw.githubusercontent.com/sainibhaowal/AlcyoNeus-Web/main/docker-compose.prod.yml -o docker-compose.prod.yml
 
             echo "🚀 [1/4] Pulling latest production container from GHCR..."
             docker compose -f docker-compose.prod.yml pull
@@ -111,7 +80,6 @@ EOF
             docker compose -f docker-compose.prod.yml up -d --wait --remove-orphans
 
             echo "🧹 [3/4] Safely cleaning up dangling images & build cache (isolated to old layers)..."
-            # Safely prunes only untagged dangling images from the previous version
             docker image prune -f || true
             docker builder prune -f || true
 
