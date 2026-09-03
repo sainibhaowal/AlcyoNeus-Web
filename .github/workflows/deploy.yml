@@ -1,10 +1,13 @@
-name: Build Docker Container & Deploy to VPS
+name: Build Docker Container & Deploy to VPS (Manual)
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
+    inputs:
+      deploy_to_vps:
+        description: "Deploy to VPS after building container?"
+        type: boolean
+        required: true
+        default: true
 
 permissions:
   contents: read
@@ -52,7 +55,7 @@ jobs:
     name: Deploy Container to VPS
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: inputs.deploy_to_vps == true
     steps:
       - name: SSH into VPS and Run Container
         uses: appleboy/ssh-action@v1.0.3

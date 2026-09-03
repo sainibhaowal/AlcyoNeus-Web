@@ -124,15 +124,19 @@ Certbot will automatically configure HTTPS redirect and SSL certificates.
 
 ---
 
-## 🚀 Step 5: Trigger GitHub Actions Deployment
+## 🚀 Step 5: Manually Run Deployment on GitHub
 
-Now every time you push to the `main` branch on GitHub:
-1. GitHub Actions automatically builds the Docker container image.
-2. Pushes the image to `ghcr.io/sainibhaowal/alcyoneus-web:latest`.
-3. SSHs into your VPS, pulls the latest image, and restarts the container on `127.0.0.1:3000`.
-4. Your website is live at **`https://alcyoneos.faimatrix.com`**!
+Deployment is configured as **100% manual** (no automatic deployments on push):
 
-To trigger it manually, visit the **Actions** tab on GitHub and click **Run workflow**.
+1. Go to your repository on GitHub: **[https://github.com/sainibhaowal/AlcyoNeus-Web/actions](https://github.com/sainibhaowal/AlcyoNeus-Web/actions)**
+2. Click on the workflow: **`Build Docker Container & Deploy to VPS (Manual)`**
+3. Click the **`Run workflow`** dropdown button.
+4. Keep the checkbox checked (`Deploy to VPS after building container?`) and click the green **`Run workflow`** button.
+5. GitHub will:
+   - Build the production Docker image.
+   - Push it to `ghcr.io/sainibhaowal/alcyoneus-web:latest`.
+   - SSH into your VPS, pull the fresh image, and start the container on `127.0.0.1:3000`.
+   - Your updated website will immediately be live at **`https://alcyoneos.faimatrix.com`**!
 
 ---
 
