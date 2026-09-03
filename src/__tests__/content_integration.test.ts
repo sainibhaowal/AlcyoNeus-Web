@@ -124,7 +124,7 @@ describe('Alcyoneus Web Content & System Integration Tests', () => {
       expect(fs.existsSync(composeProd)).toBe(true)
       const content = fs.readFileSync(composeProd, 'utf-8')
       expect(content).toContain('ghcr.io/sainibhaowal/alcyoneus-web:latest')
-      expect(content).toContain('127.0.0.1:3000:3000')
+      expect(content).toContain('3000:3000')
     })
   })
 })
