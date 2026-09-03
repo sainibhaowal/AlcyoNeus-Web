@@ -3,7 +3,7 @@ import { Header } from "@/components/header/Header"
 import { Footer } from "@/components/footer/Footer"
 
 export const metadata = {
-  metadataBase: new URL("https://github.com/sainibhaowal/Alcyoneus-OS"),
+  metadataBase: new URL("https://alcyoneos.faimatrix.com"),
   title: "Alcyoneus OS — Production-Grade Python Framework for Intelligent Agents",
   description:
     "Build, orchestrate, and deploy multi-agent LLM systems with 100+ production-ready capabilities. Open-source, Apache 2.0 Licensed.",
@@ -31,7 +31,7 @@ export const metadata = {
     title: "Alcyoneus OS — Production-Grade Python Framework for Intelligent Agents",
     description:
       "Build, orchestrate, and deploy multi-agent LLM systems with 100+ production-ready capabilities. Open-source, Apache 2.0 Licensed.",
-    url: "https://github.com/sainibhaowal/Alcyoneus-OS",
+    url: "https://alcyoneos.faimatrix.com",
     siteName: "Alcyoneus OS",
     images: [
       {
