@@ -1,132 +1,99 @@
-# Alcyoneus Web — VPS Deployment Guide
+# VPS Deployment Guide for alcyoneos.faimatrix.com
 
-This guide provides instructions for deploying **Alcyoneus Web** (Next.js 14 Standalone) to any Linux Virtual Private Server (VPS) such as Ubuntu, Debian, Hetzner, DigitalOcean, AWS EC2, or Linode.
-
----
-
-## Prerequisites
-
-- Linux Server with Ubuntu 22.04 / 24.04 or Debian 12
-- At least 512 MB RAM (1 GB recommended)
-- A domain name pointing to your VPS IP (e.g. `example.com` and `www.example.com`)
+This guide provides step-by-step instructions to deploy **Alcyoneus Web** to your Linux VPS using **GitHub Actions CI/CD** with pre-built Docker containers from GitHub Container Registry (`ghcr.io`), zero source code build overhead on the VPS, and SSL via Let's Encrypt.
 
 ---
 
-## Option A: Deploy via Docker Compose (Recommended)
+## 🏗️ Architecture Overview
 
-Docker Compose offers the easiest isolation and zero-dependency host setup.
+```
+[ Git Push to main ]
+         │
+         ▼
+[ GitHub Actions Runner ] ──> Builds Docker Container & Pushes to ghcr.io
+         │
+         ▼ (SSH Trigger)
+[ Your VPS ]
+    ├── 1. Pulls ghcr.io/sainibhaowal/alcyoneus-web:latest
+    ├── 2. Restarts Docker container on 127.0.0.1:3000
+    └── 3. Nginx Reverse Proxy (SSL) routes alcyoneos.faimatrix.com -> 127.0.0.1:3000
+```
 
-### 1. Install Docker & Docker Compose
+---
+
+## 📋 Step 1: Point Your Domain DNS
+
+In your domain registrar / DNS provider (Cloudflare, Namecheap, GoDaddy, etc.):
+- **Type**: `A`
+- **Name**: `alcyoneos` (for `alcyoneos.faimatrix.com`)
+- **Value**: `YOUR_VPS_IP_ADDRESS`
+- **TTL**: Auto or 300s
+
+---
+
+## 🔑 Step 2: Configure GitHub Repository Secrets
+
+Go to your GitHub repository:
+**`Settings` -> `Secrets and variables` -> `Actions` -> `New repository secret`**
+
+Add the following 3 secrets:
+
+| Secret Name | Description | Example |
+|---|---|---|
+| `VPS_HOST` | Your VPS public IPv4 address or hostname | `194.163.150.12` |
+| `VPS_USERNAME` | SSH login username on your VPS | `root` or `ubuntu` |
+| `VPS_SSH_KEY` | Private SSH key that has access to your VPS | `-----BEGIN OPENSSH PRIVATE KEY...` |
+| `VPS_SSH_PORT` | *(Optional, default: 22)* Custom SSH port | `22` |
+
+> [!TIP]
+> To create a dedicated SSH key for GitHub Actions on your local machine or VPS:
+> ```bash
+> ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/github_deploy
+> # 1. Copy the contents of ~/.ssh/github_deploy into the GitHub Secret VPS_SSH_KEY
+> # 2. Append ~/.ssh/github_deploy.pub to ~/.ssh/authorized_keys on your VPS:
+> cat ~/.ssh/github_deploy.pub >> ~/.ssh/authorized_keys
+> ```
+
+---
+
+## 🖥️ Step 3: Install Docker & Nginx on VPS
+
+SSH into your VPS and run:
+
 ```bash
+# 1. Install Docker
 curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER
-# Log out and log back in, or run:
-newgrp docker
-```
+sudo systemctl enable --now docker
 
-### 2. Clone and Start
-```bash
-cd /var/www/alcyoneus-web   # or your chosen directory
-docker compose up -d --build
-```
-
-### 3. Verify Container
-```bash
-docker compose ps
-docker compose logs -f
-curl http://localhost:3000
+# 2. Install Nginx & Certbot for SSL
+sudo apt update
+sudo apt install -y nginx certbot python3-certbot-nginx
 ```
 
 ---
 
-## Option B: Deploy via Node.js + PM2 (Direct Host)
+## 🌐 Step 4: Configure Nginx & SSL on VPS
 
-Next.js is configured with `output: 'standalone'`, which bundles only the required runtime code into `.next/standalone` without requiring the entire 300MB `node_modules` directory.
+### 1. Create Nginx Site Configuration
+Create `/etc/nginx/sites-available/alcyoneos.faimatrix.com.conf`:
 
-### 1. Install Node.js 20 & PM2
 ```bash
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs
-sudo npm install -g pm2
+sudo nano /etc/nginx/sites-available/alcyoneos.faimatrix.com.conf
 ```
 
-### 2. Build and Start with PM2
-```bash
-npm ci
-npm run build
-pm2 start ecosystem.config.js
-pm2 save
-pm2 startup
-```
-
-### 3. Zero-Downtime Reloads
-```bash
-./deploy.sh
-# or manually:
-pm2 reload ecosystem.config.js --update-env
-```
-
----
-
-## Option C: Deploy via Systemd Service
-
-Create `/etc/systemd/system/alcyoneus-web.service`:
-
-```ini
-[Unit]
-Description=Alcyoneus Web Next.js Standalone
-After=network.target
-
-[Service]
-Type=simple
-User=www-data
-WorkingDirectory=/var/www/alcyoneus-web
-ExecStart=/usr/bin/node /var/www/alcyoneus-web/.next/standalone/server.js
-Restart=always
-RestartSec=10
-StandardOutput=syslog
-StandardError=syslog
-SyslogIdentifier=alcyoneus-web
-Environment=NODE_ENV=production
-Environment=PORT=3000
-Environment=HOSTNAME=127.0.0.1
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start:
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable alcyoneus-web
-sudo systemctl start alcyoneus-web
-sudo systemctl status alcyoneus-web
-```
-
----
-
-## Nginx Reverse Proxy Configuration
-
-Install Nginx:
-```bash
-sudo apt update && sudo apt install -y nginx
-```
-
-Create `/etc/nginx/sites-available/alcyoneus.conf`:
+Paste the following configuration:
 
 ```nginx
 server {
-    server_name alcyoneus.ai www.alcyoneus.ai;
+    listen 80;
+    server_name alcyoneos.faimatrix.com;
 
     # Gzip compression
     gzip on;
-    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript image/svg+xml;
-
-    location /_next/static/ {
-        alias /var/www/alcyoneus-web/.next/static/;
-        expires 365d;
-        access_log off;
-    }
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_types text/plain text/css text/xml application/json application/javascript application/rss+xml application/atom+xml image/svg+xml;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -142,23 +109,45 @@ server {
 }
 ```
 
-Enable configuration and test:
+### 2. Enable Site and Test Nginx
 ```bash
-sudo ln -s /etc/nginx/sites-available/alcyoneus.conf /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/alcyoneos.faimatrix.com.conf /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
 ```
 
+### 3. Generate Free HTTPS Certificate with Certbot
+```bash
+sudo certbot --nginx -d alcyoneos.faimatrix.com
+```
+Certbot will automatically configure HTTPS redirect and SSL certificates.
+
 ---
 
-## Free SSL via Let's Encrypt (Certbot)
+## 🚀 Step 5: Trigger GitHub Actions Deployment
+
+Now every time you push to the `main` branch on GitHub:
+1. GitHub Actions automatically builds the Docker container image.
+2. Pushes the image to `ghcr.io/sainibhaowal/alcyoneus-web:latest`.
+3. SSHs into your VPS, pulls the latest image, and restarts the container on `127.0.0.1:3000`.
+4. Your website is live at **`https://alcyoneos.faimatrix.com`**!
+
+To trigger it manually, visit the **Actions** tab on GitHub and click **Run workflow**.
+
+---
+
+## 🛠️ Useful VPS Management Commands
 
 ```bash
-sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d alcyoneus.ai -d www.alcyoneus.ai
-```
+# Check container status
+docker ps -f name=alcyoneus_web
 
-Certbot will automatically configure SSL certificate renewal via cron/systemd timer. Test renewal with:
-```bash
-sudo certbot renew --dry-run
+# View real-time container logs
+docker logs -f alcyoneus_web
+
+# Restart container manually
+docker restart alcyoneus_web
+
+# Test localhost HTTP response
+curl -I http://127.0.0.1:3000/
 ```
