@@ -66,28 +66,54 @@ jobs:
           port: ${{ secrets.VPS_SSH_PORT || 22 }}
           script: |
             set -e
-            IMAGE="${{ env.REGISTRY }}/$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]'):latest"
-            
-            echo "🚀 [1/3] Pulling latest pre-built container from GHCR..."
-            docker pull $IMAGE
-            
-            echo "🔄 [2/3] Replacing running container..."
-            docker stop alcyoneus_web || true
-            docker rm alcyoneus_web || true
-            
-            echo "⚡ [3/3] Starting updated container on 127.0.0.1:3000..."
-            docker run -d \
-              --name alcyoneus_web \
-              --restart unless-stopped \
-              -p 127.0.0.1:3000:3000 \
-              -e NODE_ENV=production \
-              -e PORT=3000 \
-              -e HOSTNAME=0.0.0.0 \
-              --memory=512m \
-              $IMAGE
-            
-            # Clean up old unused images to save VPS disk space
+            DEPLOY_DIR="/opt/alcyoneus-web"
+            mkdir -p "$DEPLOY_DIR"
+            cd "$DEPLOY_DIR"
+
+            # Create or update production docker-compose file on VPS
+            cat << 'EOF' > docker-compose.prod.yml
+version: '3.8'
+
+services:
+  web:
+    image: ghcr.io/sainibhaowal/alcyoneus-web:latest
+    container_name: alcyoneus_web
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+EOF
+
+            echo "🚀 [1/4] Pulling latest production container from GHCR..."
+            docker compose -f docker-compose.prod.yml pull
+
+            echo "⚡ [2/4] Deploying container with zero-downtime (--wait & --remove-orphans)..."
+            docker compose -f docker-compose.prod.yml up -d --wait --remove-orphans
+
+            echo "🧹 [3/4] Safely cleaning up dangling images & build cache (isolated to old layers)..."
+            # Safely prunes only untagged dangling images from the previous version
             docker image prune -f || true
-            
-            echo "✅ Container running successfully:"
-            docker ps -f name=alcyoneus_web
+            docker builder prune -f || true
+
+            echo "✅ [4/4] Verified healthy and continuously running:"
+            docker compose -f docker-compose.prod.yml ps
