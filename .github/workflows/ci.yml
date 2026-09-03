@@ -36,8 +36,8 @@ jobs:
       - name: Run TypeScript typecheck
         run: npx tsc --noEmit
 
-  unit-and-integration-tests:
-    name: Unit & Integration Tests
+  build-and-test:
+    name: Production Build & Quality Tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -52,27 +52,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run Vitest test suite
-        run: npm test
-
-  production-build:
-    name: Production Build Verification
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js 20 LTS
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build Next.js standalone bundle
+      - name: Build Next.js production bundle
         run: npm run build
+
+      - name: Run complete test suite (Unit, Integration & E2E Quality)
+        run: npm test
 
   docker-build-check:
     name: Docker Build Validation
